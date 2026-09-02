@@ -6,6 +6,3 @@ requests>=2.32.3
 waitress>=3.0.2
 cryptography>=50.0.1
 keyring>=25.7.0
-
-# Development only:
-pytest>=9.1.1
