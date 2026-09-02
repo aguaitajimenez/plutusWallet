@@ -7,7 +7,7 @@ bank's own site). They never touch this process.
 """
 from flask import Flask, jsonify, render_template_string, request
 
-from . import plaid_api, store
+from . import plaid_api, security, store
 
 TRIAL_ITEM_LIMIT = 10  # lifetime, not concurrent: removing an Item does not free a slot
 
@@ -41,13 +41,15 @@ PAGE = """
 <p id=msg></p>
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 <script>
+const CSRF = {{ csrf_token|tojson }};
 async function go() {
   const kind = document.getElementById('kind').value;
   const msg  = document.getElementById('msg');
   msg.textContent = 'requesting link token...';
-  const r = await fetch('/api/link_token?products=' + kind, {method: 'POST'});
+  const r = await fetch('/api/link_token?products=' + kind,
+      {method: 'POST', headers: {'X-CSRF-Token': CSRF}});
   const d = await r.json();
-  if (d.error) { msg.innerHTML = '<span class=warn>' + d.error + '</span>'; return; }
+  if (d.error) { msg.textContent = d.error; msg.className = 'warn'; return; }
   msg.textContent = '';
   Plaid.create({
     token: d.link_token,
@@ -55,7 +57,7 @@ async function go() {
       msg.textContent = 'exchanging token...';
       const res = await fetch('/api/exchange', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF},
         body: JSON.stringify({public_token: public_token})
       });
       const out = await res.json();
@@ -70,6 +72,8 @@ async function go() {
 """
 
 app = Flask(__name__)
+# Plaid Link loads from Plaid's CDN, so this app needs the wider policy.
+security.harden(app, csp=security.CSP_LINK)
 
 
 @app.route("/")

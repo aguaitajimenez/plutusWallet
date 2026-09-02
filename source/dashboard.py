@@ -18,9 +18,10 @@ import threading
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from jinja2 import DictLoader
 
-from . import plaid_api, store, sync
+from . import plaid_api, security, store, sync
 
 app = Flask(__name__)
+security.harden(app)
 
 # Sync runs on a background thread so the page is never blocked waiting for
 # Plaid. `seq` increments on completion; the page polls it and reloads when
@@ -200,9 +201,9 @@ def _donut(slices, cx=90.0, cy=90.0, r_out=82.0, r_in=56.0, of="assets"):
              "L{:.2f},{:.2f} A{ri},{ri} 0 {} 0 {:.2f},{:.2f} Z").format(
             x0o, y0o, large, x1o, y1o, x1i, y1i, large, x0i, y0i,
             r=r_out, ri=r_in)
-        paths.append({"d": d, "cls": s["cls"],
-                      "tip": "<b>{}</b><br>{} &middot; {:.0f}% of {}".format(
-                          s["label"], money(s["value"]), frac * 100, of)})
+        paths.append({"d": d, "cls": s["cls"], "label": s["label"],
+                      "detail": "{} · {:.0f}% of {}".format(
+                          money(s["value"]), frac * 100, of)})
         a0 = a1
     return paths
 
@@ -690,7 +691,7 @@ def sync_status():
 def refresh():
     start_sync()
     nxt = request.form.get("next") or "/"
-    return redirect(nxt if nxt.startswith("/") else url_for("overview"))
+    return redirect(security.safe_redirect_target(nxt, url_for("overview")))
 
 
 LAYOUT = """
@@ -855,6 +856,7 @@ LAYOUT = """
     <div class=refwrap>
       <form id=refreshform method=post action="{{ url_for('refresh') }}">
         <input type=hidden name=next value="{{ request.path }}">
+        <input type=hidden name=csrf value="{{ csrf_token }}">
         <button>Refresh</button></form>
       <button type=button class=caret id=caret aria-label="Refresh options">&#9662;</button>
       <div class=menu id=refmenu hidden>
@@ -964,9 +966,20 @@ document.addEventListener('mousemove', function (e) {
   });
   if (!wrap || !t.classList.contains('hit')) return;
   var tip = wrap.querySelector('.tip');
-  tip.innerHTML = t.dataset.tip ||
-                  '<b>' + t.dataset.label + '</b><br>Income ' + t.dataset.income +
-                  '<br>Expenses ' + t.dataset.expenses + '<br>Net ' + t.dataset.net;
+  // textContent only: merchant and category names come from Plaid and are
+  // never trusted as markup.
+  tip.textContent = '';
+  var head = document.createElement('b');
+  head.textContent = t.dataset.label || '';
+  tip.appendChild(head);
+  var lines = t.dataset.detail
+      ? [t.dataset.detail]
+      : ['Income ' + t.dataset.income, 'Expenses ' + t.dataset.expenses,
+         'Net ' + t.dataset.net];
+  lines.forEach(function (line) {
+    tip.appendChild(document.createElement('br'));
+    tip.appendChild(document.createTextNode(line));
+  });
   tip.hidden = false;
   var r = wrap.getBoundingClientRect();
   var x = e.clientX - r.left + 14, y = e.clientY - r.top - 10;
@@ -992,7 +1005,8 @@ OVERVIEW = """
   {% if donut %}
   <div class=chartwrap>
     <svg viewBox="0 0 180 180" class=donut role=img>
-      {% for p in donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-tip="{{ p.tip }}" />{% endfor %}
+      {% for p in donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-label="{{ p.label }}"
+            data-detail="{{ p.detail }}" />{% endfor %}
       <text x=90 y=88 text-anchor=middle class=don-big>
         {{- '{:.0f}%'.format(pct_saa) if pct_saa is not none else '--' -}}
       </text>
@@ -1043,6 +1057,7 @@ OVERVIEW = """
        debt is already netted inside net worth.</p>
   </div>
   <form method=post action="{{ url_for('save_settings') }}" class=saaform>
+    <input type=hidden name=csrf value="{{ csrf_token }}">
     <label>Target invested %
       <input type=number name=target min=0 max=100 step=1
              value="{{ '%.0f'|format(target) if target is not none else '' }}" placeholder="e.g. 60">
@@ -1067,7 +1082,8 @@ OVERVIEW = """
 <div class=alloc>
   <div class=chartwrap>
     <svg viewBox="0 0 180 180" class=donut role=img>
-      {% for p in exp_donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-tip="{{ p.tip }}" />{% endfor %}
+      {% for p in exp_donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-label="{{ p.label }}"
+            data-detail="{{ p.detail }}" />{% endfor %}
       <text x=90 y=88 text-anchor=middle class=don-big>{{ spend_total|kmoney }}</text>
       <text x=90 y=108 text-anchor=middle class=don-small>spent</text>
     </svg>
@@ -1206,7 +1222,8 @@ document.querySelectorAll('.seg button[data-p]').forEach(function (b) {
 <div class=alloc>
   <div class=chartwrap>
     <svg viewBox="0 0 180 180" class=donut role=img>
-      {% for p in cat_donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-tip="{{ p.tip }}" />{% endfor %}
+      {% for p in cat_donut %}<path d="{{ p.d }}" class="hit {{ p.cls }}" data-label="{{ p.label }}"
+            data-detail="{{ p.detail }}" />{% endfor %}
       <text x=90 y=88 text-anchor=middle class=don-big>{{ spend_total|kmoney }}</text>
       <text x=90 y=108 text-anchor=middle class=don-small>spent</text>
     </svg>
