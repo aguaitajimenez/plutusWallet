@@ -10,9 +10,7 @@ mode returns to the menu.
 import getpass
 import webbrowser
 
-import plaid_api
-import store
-import sync
+from source import plaid_api, store, sync
 
 
 def _safe_sync(label):
@@ -54,16 +52,19 @@ def configure():
 
 
 def run_dashboard():
-    import dashboard
+    from source import dashboard
 
+    # Sync on a background thread so the page opens immediately with the last
+    # known values; it reloads itself when the fresh ones land.
     if plaid_api.have_credentials():
-        print("\nSyncing before opening...")
-        _safe_sync("sync")
+        dashboard.start_sync()
+        note = "syncing in the background; the page refreshes when it lands"
     else:
-        print("\nNo credentials yet - opening with whatever is already stored.")
+        note = "no credentials - showing stored data only"
 
     url = "http://localhost:8001"
-    print("\nDashboard -> {}   (Ctrl+C to return to menu)\n".format(url))
+    print("\nDashboard -> {}   ({})".format(url, note))
+    print("   (Ctrl+C to return to menu)\n")
     webbrowser.open(url)
     try:
         dashboard.app.run(port=8001, debug=False, use_reloader=False)
@@ -73,7 +74,7 @@ def run_dashboard():
 
 
 def run_link():
-    import link_server
+    from source import link_server
 
     url = "http://localhost:8000"
     print("\nLink server -> {}   (Ctrl+C to return to menu)\n".format(url))
@@ -104,7 +105,6 @@ def main():
         print("""
   [Enter]  Dashboard   (syncs on entry; Refresh button after)
   [l]      Link a new institution
-  [s]      Sync only
   [c]      Configure Plaid credentials
   [q]      Quit
 """)
@@ -120,12 +120,10 @@ def main():
             return
         elif choice in ("", "d"):
             run_dashboard()
-        elif choice in ("l", "s") and not plaid_api.have_credentials():
+        elif choice == "l" and not plaid_api.have_credentials():
             print("\n  Plaid credentials required first - choose [c].")
         elif choice == "l":
             run_link()
-        elif choice == "s":
-            _safe_sync("sync")
 
 
 if __name__ == "__main__":

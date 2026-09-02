@@ -13,15 +13,41 @@ import datetime
 import math
 import re
 import statistics
+import threading
 
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from jinja2 import DictLoader
 
-import plaid_api
-import store
-import sync
+from . import plaid_api, store, sync
 
 app = Flask(__name__)
+
+# Sync runs on a background thread so the page is never blocked waiting for
+# Plaid. `seq` increments on completion; the page polls it and reloads when
+# it changes, which is how fresh values reach a browser that is already open.
+_sync_lock = threading.Lock()
+SYNC = {"running": False, "seq": 0, "error": None}
+
+
+def start_sync():
+    """Kick off a sync unless one is already in flight. Returns True if started."""
+    with _sync_lock:
+        if SYNC["running"]:
+            return False
+        SYNC["running"], SYNC["error"] = True, None
+
+    def work():
+        try:
+            sync.main()
+        except Exception as exc:  # a dead connection must not wedge the flag
+            SYNC["error"] = str(exc)
+        finally:
+            with _sync_lock:
+                SYNC["running"] = False
+                SYNC["seq"] += 1
+
+    threading.Thread(target=work, daemon=True).start()
+    return True
 
 DEBT_TYPES = {"credit", "loan"}
 INVEST_TYPES = {"investment", "brokerage"}
@@ -216,6 +242,9 @@ def common(conn, env, accounts, linked):
         "linked": linked,
         "updated": freshest[:16] if freshest else None,
         "empty": not accounts,
+        "syncing": SYNC["running"],
+        "seq": SYNC["seq"],
+        "sync_error": SYNC["error"],
     }
 
 
@@ -598,8 +627,31 @@ def investments():
         basis_total += basis or 0
 
     gain_total = (total - basis_total) if basis_total else None
+
+    # Investment activity: buys, sells, dividends, fees.
+    activity = [dict(r) for r in conn.execute(
+        """SELECT it.* FROM investment_transactions it
+           JOIN accounts a ON a.account_id = it.account_id
+           JOIN items i ON i.item_id = a.item_id
+           WHERE i.env = ? ORDER BY it.date DESC, it.investment_transaction_id""",
+        (env,))]
+    # Plaid convention: positive amount = cash leaving the account.
+    flows = {"buys": 0.0, "sells": 0.0, "dividends": 0.0, "fees": 0.0}
+    for t in activity:
+        amt, sub = t["amount"] or 0, (t["subtype"] or "").lower()
+        if t["type"] == "buy":
+            flows["buys"] += amt
+        elif t["type"] == "sell":
+            flows["sells"] += -amt
+        elif sub in ("dividend", "qualified dividend", "non-qualified dividend"):
+            flows["dividends"] += -amt
+        elif t["type"] == "fee" or sub == "fee":
+            flows["fees"] += amt
+        flows["fees"] += t["fees"] or 0
+
     return render_template(
         "invest.html",
+        activity=activity, flows=flows,
         c=common(conn, env, accounts, linked),
         holdings=holdings, total=total, basis_total=basis_total,
         gain_total=gain_total,
@@ -625,13 +677,20 @@ def save_settings():
     return redirect(url_for("overview"))
 
 
+@app.route("/api/sync")
+def sync_status():
+    resp = jsonify(running=SYNC["running"], seq=SYNC["seq"], error=SYNC["error"])
+    # Without this the browser heuristically caches the first response and the
+    # poller never sees the sync finish.
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
+
 @app.route("/refresh", methods=["POST"])
 def refresh():
-    try:
-        sync.main()
-    except Exception as exc:  # a dead connection shouldn't take the page down
-        print("refresh failed: {}".format(exc))
-    return redirect(url_for("overview"))
+    start_sync()
+    nxt = request.form.get("next") or "/"
+    return redirect(nxt if nxt.startswith("/") else url_for("overview"))
 
 
 LAYOUT = """
@@ -651,6 +710,8 @@ LAYOUT = """
          --don-inv:#3987e5;--don-cash:#d95926;
          --c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500;--c5:#d55181;--cother:#898781}}
  *{box-sizing:border-box}
+ /* Must outrank any author `display` rule, or `hidden` silently does nothing. */
+ [hidden]{display:none!important}
  body{margin:0;background:var(--bg);color:var(--fg);
       font:15px/1.55 ui-sans-serif,system-ui,sans-serif}
  main{max-width:56rem;margin:0 auto;padding:1.5rem 1.25rem 4rem}
@@ -662,6 +723,12 @@ LAYOUT = """
  nav .right{margin-left:auto;display:flex;gap:.75rem;align-items:center}
  .tag{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:.2rem .5rem;
       border-radius:20px;border:1px solid var(--line);color:var(--dim)}
+ .syncing{font-size:.72rem;color:var(--dim);display:inline-flex;align-items:center;gap:.4rem}
+ .syncing::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--flow-in);
+                  animation:pulse 1.1s ease-in-out infinite}
+ @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+ .syncfail{background:var(--card);border:1px solid var(--neg);border-radius:8px;
+           padding:.6rem .9rem;color:var(--neg);font-size:.85rem;margin:0 0 1.2rem}
  form{margin:0}
  button{font:inherit;font-size:.85rem;padding:.4rem .8rem;border-radius:7px;
         border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
@@ -784,8 +851,11 @@ LAYOUT = """
   <a href="{{ url_for('subscriptions') }}" class="{{ 'on' if tab == 'subs' }}">Subscriptions</a>
   <div class=right>
     <span class=tag>{{ c.env }}</span>
+    <span class=syncing id=syncpill {{ '' if c.syncing else 'hidden' }}>syncing</span>
     <div class=refwrap>
-      <form id=refreshform method=post action="{{ url_for('refresh') }}"><button>Refresh</button></form>
+      <form id=refreshform method=post action="{{ url_for('refresh') }}">
+        <input type=hidden name=next value="{{ request.path }}">
+        <button>Refresh</button></form>
       <button type=button class=caret id=caret aria-label="Refresh options">&#9662;</button>
       <div class=menu id=refmenu hidden>
         <label><input type=checkbox id=autoref> Auto-refresh every 10 min</label>
@@ -793,6 +863,9 @@ LAYOUT = """
     </div>
   </div>
 </nav>
+{% if c.sync_error %}
+<p class=syncfail>Last sync failed: {{ c.sync_error }}</p>
+{% endif %}
 {% if c.empty %}
   <div class=empty>
     <p>No accounts linked yet.</p>
@@ -806,6 +879,28 @@ LAYOUT = """
 {% endif %}
 </main>
 <script>
+// While a background sync runs, poll for completion and reload once the new
+// values are in the database. `seq` bumps on every finished sync.
+(function () {
+  var seq = {{ c.seq }}, pill = document.getElementById('syncpill'), tries = 0;
+  function stop() { if (pill) pill.hidden = true; }
+  function poll() {
+    // cache-bust twice over: no-store plus a unique URL, so a stuck cache
+    // entry can never freeze the indicator on.
+    fetch('/api/sync?t=' + Date.now(), {cache: 'no-store'})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.seq !== seq) { location.reload(); return; }
+        if (pill) pill.hidden = !d.running;
+        if (!d.running) return stop();
+        if (++tries < 240) setTimeout(poll, 1500);  // give up after ~6 min
+        else stop();
+      })
+      .catch(function () { if (++tries < 240) setTimeout(poll, 3000); else stop(); });
+  }
+  if ({{ 'true' if c.syncing else 'false' }}) poll();
+})();
+
 // Refresh options: caret opens a menu with the auto-refresh toggle.
 // When on, the page re-syncs and reloads itself every 10 minutes by
 // submitting the same form the Refresh button uses.
@@ -1232,6 +1327,35 @@ INVEST = """
 {% else %}
 <div class=empty><p>No holdings synced yet. Link Wealthfront as
   <b>Brokerage</b> in the link server, then refresh.</p></div>
+{% endif %}
+
+<h2>Activity</h2>
+{% if activity %}
+<div class=tiles>
+  <div class=tile><span>Bought</span><b>{{ flows.buys|money }}</b></div>
+  <div class=tile><span>Sold</span><b>{{ flows.sells|money }}</b></div>
+  <div class=tile><span>Dividends</span><b class=pos>{{ flows.dividends|money }}</b></div>
+  <div class=tile><span>Fees</span><b class="{{ 'neg' if flows.fees }}">{{ flows.fees|money }}</b></div>
+</div>
+<div class=wrap><table id=recenttable>
+  <tr><th>Date</th><th>Type</th><th>Security</th><th class=n>Qty</th><th class=n>Amount</th></tr>
+  {% for t in activity %}
+  <tr {{ 'hidden' if loop.index0 >= 25 }}>
+    <td class=nw>{{ t.date }}</td>
+    <td class=muted>{{ t.subtype or t.type }}</td>
+    <td>{% if t.ticker %}<b>{{ t.ticker }}</b>{% else %}<span class=muted>{{ t.name or '' }}</span>{% endif %}</td>
+    <td class="n muted">{{ '%.4f'|format(t.quantity) if t.quantity is not none else '--' }}</td>
+    <td class="n {{ 'pos' if t.amount is not none and t.amount < 0 }}">{{ t.amount|money }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% if activity|length > 25 %}
+<p><button type=button id=morebtn>Show more ({{ activity|length - 25 }} remaining)</button></p>
+{% endif %}
+<p class=note>Positive amounts are cash leaving the account (purchases);
+   negative amounts are cash coming back (sales, dividends).</p>
+{% else %}
+<div class=empty><p>No investment activity synced yet.</p></div>
 {% endif %}
 {% endblock %}
 """

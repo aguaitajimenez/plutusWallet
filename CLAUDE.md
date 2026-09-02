@@ -10,18 +10,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pip install -r requirements.txt
-python app.py            # TUI entry point: configure credentials, dashboard, link, sync
-sqlite3 plaid_data.db    # inspect results
+python app.py                      # TUI entry point: configure credentials, dashboard, link
+sqlite3 ~/.plutus/plaid_data.db    # inspect results
 ```
 
 First run needs `[c] Configure` to store a Plaid `client_id`/secret pair. The secret's environment is detected automatically by minting a throwaway link token against both hosts (creates no Item, costs nothing).
 
-`link_server.py`, `sync.py`, and `dashboard.py` remain runnable individually; `app.py` just orchestrates them (sync on entry + browser launch). Refreshing after that is the page's Refresh button, which runs the sync in-process; its dropdown has an auto-refresh toggle (client-side timer that re-submits the same form, persisted in localStorage).
+Everything else lives in the `source/` package and stays individually runnable — `python -m source.sync`, `python -m source.dashboard`, `python -m source.link_server` (module form, not `python source/sync.py`, because of the relative imports). `app.py` just orchestrates them.
+
+Layout: `app.py` (TUI) at the root; `source/` holds `config` (paths, permissions, logging), `plaid_api` (REST wrapper + credential store), `store` (SQLite), `sync`, `link_server`, and `dashboard`.
+
+Nothing user-specific lives in the checkout. `source/config.py` owns the layout under `~/.plutus/` — `credentials`, `plaid_data.db`, `backups/`, `plutus.log` — so the repo stays disposable. Always address those through `config.db_path()` / `config.credentials_path()`, never by joining paths from `__file__`. `PLUTUS_HOME` relocates the whole directory. Pre-1.0 locations (`~/.plutusTracker`, `<project>/plaid_data.db`) are migrated by `config.ensure_home()` on first run, which copies rather than moves.
 
 There is no test suite. The smoke check is that modules import and the credential guard fires:
 
 ```bash
-python -c "import plaid_api, store, link_server, sync; store.connect(); print(plaid_api.ENV)"
+python -c "from source import plaid_api, store, link_server, sync, dashboard; store.connect(); print(plaid_api.ENV)"
 ```
 
 ## Architecture
@@ -58,6 +62,6 @@ Transactions are incremental via a cursor stored on the Item row. Holdings are a
 
 ## Secrets
 
-Credentials live in `~/.plutusTracker` (outside the repo). `.env` and `*.db` are gitignored. Note that `plaid_data.db` contains access tokens in plaintext — treat the database file itself as a credential, not just as data.
+Credentials and the database both live in `~/.plutus/` (outside the repo), locked to the owner by `config.restrict()` — POSIX modes elsewhere, `icacls` on Windows, best-effort either way. `.env` and `*.db` are gitignored as a backstop. Note that `plaid_data.db` contains access tokens in plaintext — treat the database file itself as a credential, not just as data. `config.setup_logging()` installs a filter that redacts secrets and Plaid tokens from log output.
 
 Access tokens are bound to the `client_id` that created them. Swapping in a different `client_id` invalidates every stored token, and re-linking costs Items from the lifetime Trial allowance.

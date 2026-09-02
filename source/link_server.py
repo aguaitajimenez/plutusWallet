@@ -7,8 +7,7 @@ bank's own site). They never touch this process.
 """
 from flask import Flask, jsonify, render_template_string, request
 
-import plaid_api
-import store
+from . import plaid_api, store
 
 TRIAL_ITEM_LIMIT = 10  # lifetime, not concurrent: removing an Item does not free a slot
 

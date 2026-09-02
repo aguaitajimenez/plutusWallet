@@ -1,8 +1,12 @@
-"""SQLite persistence: access tokens, accounts, transactions, holdings."""
-import pathlib
+"""SQLite persistence: access tokens, accounts, transactions, holdings.
+
+The database lives in ~/.plutus alongside the credentials, not in the
+checkout: it holds Plaid access tokens, so it is a credential itself and must
+survive `git clean`.
+"""
 import sqlite3
 
-DB_PATH = pathlib.Path(__file__).parent / "plaid_data.db"
+from . import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -38,6 +42,22 @@ CREATE TABLE IF NOT EXISTS transactions (
     category       TEXT,
     pending        INTEGER
 );
+CREATE TABLE IF NOT EXISTS investment_transactions (
+    investment_transaction_id TEXT PRIMARY KEY,
+    account_id    TEXT,
+    security_id   TEXT,
+    ticker        TEXT,
+    name          TEXT,
+    type          TEXT,
+    subtype       TEXT,
+    date          TEXT,
+    quantity      REAL,
+    price         REAL,
+    amount        REAL,
+    fees          REAL,
+    currency      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_invtxn_date ON investment_transactions (date);
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -60,8 +80,16 @@ CREATE TABLE IF NOT EXISTS holdings (
 
 
 def connect():
-    conn = sqlite3.connect(DB_PATH)
+    config.ensure_home()
+    created = not config.db_path().exists()
+    conn = sqlite3.connect(config.db_path())
+    if created:
+        config.restrict(config.db_path())
     conn.row_factory = sqlite3.Row
+    # The dashboard reads on request threads while a background sync writes;
+    # WAL lets those overlap, and the timeout absorbs the brief write locks.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.executescript(SCHEMA)
     return conn
 

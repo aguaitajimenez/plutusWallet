@@ -4,16 +4,25 @@ Plain `requests` rather than plaid-python: the JSON API is stable, while the
 typed SDK's model imports change shape between releases and buy us nothing at
 this size.
 
-Credentials live in ~/.plutusTracker, written by the Configure option in
-app.py. A project .env is still honored as a fallback.
+Credentials live in ~/.plutus/credentials, written by the Configure option in
+app.py. Environment variables of the same names override the file, which is
+what CI and the test suite use.
 """
+import logging
 import os
-import pathlib
+import time
 
 import requests
-from dotenv import load_dotenv
 
-CONFIG_PATH = pathlib.Path.home() / ".plutusTracker"
+from . import config
+
+log = logging.getLogger("plutus")
+
+# Transient failures worth retrying rather than surfacing to the user.
+RETRY_STATUS = {429, 500, 502, 503, 504}
+RETRIES = 3
+BACKOFF_S = 1.5
+TIMEOUT_S = 45
 
 HOSTS = {
     "sandbox": "https://sandbox.plaid.com",
@@ -39,7 +48,7 @@ def _read_config():
     """Parse the KEY=VALUE credential file; a missing file is not an error."""
     data = {}
     try:
-        text = CONFIG_PATH.read_text(encoding="utf-8")
+        text = config.credentials_path().read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return data
     for line in text.splitlines():
@@ -52,19 +61,17 @@ def _read_config():
 
 
 def _write_config(cfg):
+    config.ensure_home()
     lines = ["# PlutusTracker credentials - treat this file as a password.", ""]
     lines += ["{}={}".format(k, cfg[k]) for k in KEYS if cfg.get(k)]
-    CONFIG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    try:  # best effort; Windows ACLs don't map onto POSIX modes
-        CONFIG_PATH.chmod(0o600)
-    except OSError:
-        pass
+    path = config.credentials_path()
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    config.restrict(path)
 
 
 def reload():
     """Re-resolve ENV/CLIENT_ID/SECRET. Call after saving new credentials."""
     global ENV, CLIENT_ID, SECRET
-    load_dotenv()  # project .env, for setups predating ~/.plutusTracker
     cfg = _read_config()
 
     def get(key):
@@ -109,7 +116,7 @@ def detect_env(client_id, secret):
 
 
 def save_credentials(client_id, secret, env):
-    """Store the pair in ~/.plutusTracker and make `env` active."""
+    """Store the pair in ~/.plutus/credentials and make `env` active."""
     cfg = _read_config()
     cfg["PLAID_CLIENT_ID"] = client_id
     cfg["PLAID_SECRET_{}".format(env.upper())] = secret
@@ -121,13 +128,19 @@ def save_credentials(client_id, secret, env):
 def clear_credentials():
     """Forget stored credentials. Linked Items in the database are untouched."""
     try:
-        CONFIG_PATH.unlink()
+        config.credentials_path().unlink()
     except OSError:
         pass
     return reload()
 
 
 def call(path, **body):
+    """POST to Plaid, retrying transient failures.
+
+    Rate limits and 5xx are worth a second try; a bad request or an expired
+    login is not, so PlaidError propagates immediately for the caller to
+    classify.
+    """
     if ENV not in HOSTS:
         raise RuntimeError("PLAID_ENV must be 'sandbox' or 'production', got {!r}".format(ENV))
     if not CLIENT_ID or not SECRET:
@@ -135,17 +148,35 @@ def call(path, **body):
             "No Plaid credentials for {} - run 'python app.py' and choose "
             "[c] Configure.".format(ENV)
         )
-    resp = requests.post(
-        HOSTS[ENV] + path,
-        json={"client_id": CLIENT_ID, "secret": SECRET, **body},
-        timeout=30,
-    )
-    if resp.status_code != 200:
+
+    payload = {"client_id": CLIENT_ID, "secret": SECRET, **body}
+    last_exc = None
+    for attempt in range(1, RETRIES + 1):
         try:
-            raise PlaidError(resp.json())
-        except ValueError:
-            resp.raise_for_status()
-    return resp.json()
+            resp = requests.post(HOSTS[ENV] + path, json=payload, timeout=TIMEOUT_S)
+        except requests.RequestException as exc:
+            last_exc = exc
+            log.warning("%s: network error (attempt %d/%d): %s",
+                        path, attempt, RETRIES, exc)
+        else:
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code not in RETRY_STATUS:
+                try:
+                    raise PlaidError(resp.json())
+                except ValueError:
+                    resp.raise_for_status()
+            last_exc = None
+            log.warning("%s: HTTP %s (attempt %d/%d)",
+                        path, resp.status_code, attempt, RETRIES)
+        if attempt < RETRIES:
+            time.sleep(BACKOFF_S * attempt)
+
+    if last_exc is not None:
+        raise last_exc
+    raise PlaidError({"error_code": "PLAID_UNAVAILABLE",
+                      "error_message": "Plaid did not respond successfully after "
+                                       "{} attempts".format(RETRIES)})
 
 
 def institution_name(institution_id):
