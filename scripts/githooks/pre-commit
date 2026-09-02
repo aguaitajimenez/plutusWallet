@@ -1,0 +1,4 @@
+#!/bin/sh
+# Block commits that carry credentials. Enabled by:
+#   git config core.hooksPath scripts/githooks
+exec python scripts/check_secrets.py

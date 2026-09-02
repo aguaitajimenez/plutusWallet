@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**PlutusTracker** — a personal, local-only tool that pulls the owner's own financial data (Chase transactions, Wealthfront holdings) through the Plaid API into a SQLite file, and serves a local dashboard over it. Read-only: no money-movement products are used or wanted.
+**PlutusTracker** — a personal, local-only tool that pulls a user's own bank and brokerage data through the Plaid API into a SQLite file, and serves a local dashboard over it. Read-only: no money-movement products are used or wanted.
 
 ## Commands
 
