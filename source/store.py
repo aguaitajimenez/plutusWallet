@@ -6,7 +6,7 @@ survive `git clean`.
 """
 import sqlite3
 
-from . import config
+from . import config, crypto
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -99,13 +99,32 @@ def save_item(conn, item_id, access_token, institution_id, institution_name, env
         """INSERT INTO items (item_id, access_token, institution_id, institution_name, env)
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(item_id) DO UPDATE SET access_token = excluded.access_token""",
-        (item_id, access_token, institution_id, institution_name, env),
+        (item_id, crypto.encrypt(access_token), institution_id, institution_name, env),
     )
     conn.commit()
 
 
 def items(conn, env):
-    return conn.execute("SELECT * FROM items WHERE env = ? ORDER BY linked_at", (env,)).fetchall()
+    """Linked Items as dicts, with access tokens decrypted for use.
+
+    Rows written before encryption existed are upgraded in place the first
+    time they are read, so no explicit migration step is needed.
+    """
+    rows = conn.execute(
+        "SELECT * FROM items WHERE env = ? ORDER BY linked_at", (env,)).fetchall()
+    out, upgrade = [], []
+    for row in rows:
+        item = dict(row)
+        stored = item["access_token"]
+        if not crypto.is_encrypted(stored):
+            upgrade.append((crypto.encrypt(stored), item["item_id"]))
+        else:
+            item["access_token"] = crypto.decrypt(stored)
+        out.append(item)
+    if upgrade:
+        conn.executemany("UPDATE items SET access_token = ? WHERE item_id = ?", upgrade)
+        conn.commit()
+    return out
 
 
 def set_cursor(conn, item_id, cursor):

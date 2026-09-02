@@ -62,6 +62,8 @@ Transactions are incremental via a cursor stored on the Item row. Holdings are a
 
 ## Secrets
 
-Credentials and the database both live in `~/.plutus/` (outside the repo), locked to the owner by `config.restrict()` — POSIX modes elsewhere, `icacls` on Windows, best-effort either way. `.env` and `*.db` are gitignored as a backstop. Note that `plaid_data.db` contains access tokens in plaintext — treat the database file itself as a credential, not just as data. `config.setup_logging()` installs a filter that redacts secrets and Plaid tokens from log output.
+Credentials and the database both live in `~/.plutus/` (outside the repo), locked to the owner by `config.restrict()` — POSIX modes elsewhere, `icacls` on Windows, best-effort either way. `.env` and `*.db` are gitignored as a backstop.
+
+Access tokens are encrypted at rest by `source/crypto.py` (Fernet, `enc1:` prefix), with the key in the OS credential store via `keyring` and a key-file fallback; `crypto.key_source()` reports which is active. `store.items()` decrypts transparently and re-encrypts any plaintext rows it finds, so callers always see usable tokens — never write a raw token into `items.access_token`. `config.setup_logging()` installs a filter that redacts secrets and Plaid tokens from log output.
 
 Access tokens are bound to the `client_id` that created them. Swapping in a different `client_id` invalidates every stored token, and re-linking costs Items from the lifetime Trial allowance.

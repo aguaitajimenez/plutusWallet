@@ -195,9 +195,18 @@ reflects what you actually still pay for.
 Nothing user-specific is stored in the checkout, so the repository stays
 disposable. Set `PLUTUS_HOME` to relocate the directory.
 
-**Treat `plaid_data.db` as a credential, not just data** — it contains your
-Plaid access tokens in plaintext. The app restricts permissions on these files
-to your user account where the OS allows it.
+Plaid **access tokens are encrypted at rest** in the database. The encryption
+key is held in your operating system's credential store — Windows Credential
+Manager, macOS Keychain, or Secret Service on Linux — rather than beside the
+data, so a copied database is inert on another machine or account. Where no OS
+keystore is available (a headless server, say), the app falls back to a key
+file next to the database and reports that it has done so; that still protects
+against casual disclosure through backups, but anyone who can read the
+directory can read the key too.
+
+The app also restricts file permissions to your user account where the OS
+allows it. Still, treat `~/.plutus/` as sensitive: your full transaction
+history lives there.
 
 ---
 
