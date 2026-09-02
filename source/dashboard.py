@@ -18,7 +18,7 @@ import threading
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from jinja2 import DictLoader
 
-from . import plaid_api, security, store, sync
+from . import config, plaid_api, security, store, sync
 
 app = Flask(__name__)
 security.harden(app)
@@ -1449,4 +1449,4 @@ app.jinja_loader = DictLoader({
 
 if __name__ == "__main__":
     print("\n  {}  ->  http://localhost:8001\n".format(plaid_api.ENV.upper()))
-    app.run(port=8001, debug=False)
+    config.serve(app, 8001, "Dashboard")

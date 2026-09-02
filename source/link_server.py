@@ -7,7 +7,7 @@ bank's own site). They never touch this process.
 """
 from flask import Flask, jsonify, render_template_string, request
 
-from . import plaid_api, security, store
+from . import config, plaid_api, security, store
 
 TRIAL_ITEM_LIMIT = 10  # lifetime, not concurrent: removing an Item does not free a slot
 
@@ -147,4 +147,4 @@ def exchange():
 
 if __name__ == "__main__":
     print("\n  {}  ->  http://localhost:8000\n".format(plaid_api.ENV.upper()))
-    app.run(port=8000, debug=False)
+    config.serve(app, 8000, "Link server")

@@ -1,0 +1,72 @@
+PlutusTracker — Proprietary Software License
+Copyright (c) 2026 <YOUR NAME OR COMPANY>. All rights reserved.
+
+THIS IS NOT OPEN SOURCE SOFTWARE. It is made available under the terms below
+and under no other terms.
+
+1. DEFINITIONS
+   "Software" means the PlutusTracker source code, documentation and any
+   accompanying files. "Licensor" means the copyright holder named above.
+   "You" means the individual or entity granted a licence under Section 2.
+
+2. GRANT OF LICENCE
+   Subject to Your compliance with this Licence and payment of any applicable
+   fee, Licensor grants You a non-exclusive, non-transferable, revocable
+   licence to install and run one copy of the Software on computers You own or
+   control, for Your own internal purposes.
+
+3. RESTRICTIONS
+   You may not, in whole or in part:
+   (a) copy, publish, distribute, sublicense, sell, rent, lease or otherwise
+       make the Software available to any third party;
+   (b) host the Software, or any derivative of it, as a service for others;
+   (c) modify, adapt or create derivative works, except for Your own internal
+       use, and never for distribution;
+   (d) remove or obscure any copyright, trademark or licence notice; or
+   (e) use the Software to build a competing product.
+
+4. OWNERSHIP
+   The Software is licensed, not sold. Licensor retains all right, title and
+   interest in and to the Software, including all intellectual property rights.
+
+5. THIRD-PARTY SERVICES
+   The Software connects to the Plaid API. Your use of Plaid is governed by
+   Your own agreement with Plaid, and You are responsible for obtaining and
+   paying for Your own Plaid credentials and for complying with Plaid's terms
+   and with all laws applicable to the financial data You access.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. THE SOFTWARE DISPLAYS
+   FINANCIAL INFORMATION FOR INFORMATIONAL PURPOSES ONLY AND DOES NOT PROVIDE
+   INVESTMENT, TAX OR LEGAL ADVICE.
+
+7. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL LICENSOR BE LIABLE
+   FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+   TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+   OR ITS USE, INCLUDING ANY FINANCIAL LOSS OR DECISION MADE IN RELIANCE ON IT.
+
+8. TERMINATION
+   This Licence terminates automatically if You breach any term. On termination
+   You must stop using the Software and delete all copies.
+
+-------------------------------------------------------------------------------
+NOTE FOR THE COPYRIGHT HOLDER — DELETE THIS SECTION BEFORE DISTRIBUTING
+
+This is a starting template, not legal advice, and it has not been reviewed by
+a lawyer. Before selling this software:
+
+  * Replace <YOUR NAME OR COMPANY> above.
+  * Have a lawyer review it. Software that touches other people's bank data
+    carries obligations a licence alone does not address.
+  * Decide where the code lives. A private repository plus this licence is the
+    strongest combination. A PUBLIC GitHub repository is different: GitHub's
+    Terms of Service grant every GitHub user the right to view and fork a
+    public repository regardless of what this file says.
+
+If you would rather publish the source but still block competitors, consider
+PolyForm Noncommercial 1.0.0, PolyForm Perimeter 1.0.0, the Business Source
+License 1.1, or the Elastic License 2.0 instead of this file.
+-------------------------------------------------------------------------------

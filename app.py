@@ -10,7 +10,7 @@ mode returns to the menu.
 import getpass
 import webbrowser
 
-from source import plaid_api, store, sync
+from source import config, plaid_api, store, sync
 
 
 def _safe_sync(label):
@@ -67,7 +67,7 @@ def run_dashboard():
     print("   (Ctrl+C to return to menu)\n")
     webbrowser.open(url)
     try:
-        dashboard.app.run(port=8001, debug=False, use_reloader=False)
+        config.serve(dashboard.app, 8001, "Dashboard")
     except KeyboardInterrupt:
         pass
     print("\nBack to menu.")
@@ -80,7 +80,7 @@ def run_link():
     print("\nLink server -> {}   (Ctrl+C to return to menu)\n".format(url))
     webbrowser.open(url)
     try:
-        link_server.app.run(port=8000, debug=False, use_reloader=False)
+        config.serve(link_server.app, 8000, "Link server")
     except KeyboardInterrupt:
         pass
     print("\nBack to menu.")
@@ -100,6 +100,9 @@ def banner():
 
 
 def main():
+    config.setup_logging()
+    for note in config.ensure_home():
+        print("  {}".format(note))
     while True:
         banner()
         print("""

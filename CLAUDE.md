@@ -22,11 +22,7 @@ Layout: `app.py` (TUI) at the root; `source/` holds `config` (paths, permissions
 
 Nothing user-specific lives in the checkout. `source/config.py` owns the layout under `~/.plutus/` — `credentials`, `plaid_data.db`, `backups/`, `plutus.log` — so the repo stays disposable. Always address those through `config.db_path()` / `config.credentials_path()`, never by joining paths from `__file__`. `PLUTUS_HOME` relocates the whole directory. Pre-1.0 locations (`~/.plutusTracker`, `<project>/plaid_data.db`) are migrated by `config.ensure_home()` on first run, which copies rather than moves.
 
-There is no test suite. The smoke check is that modules import and the credential guard fires:
-
-```bash
-python -c "from source import plaid_api, store, link_server, sync, dashboard; store.connect(); print(plaid_api.ENV)"
-```
+`tests/conftest.py` points `PLUTUS_HOME` at a temp directory, sets `PLUTUS_NO_KEYRING`, and stubs `plaid_api.call` **at module scope** — before any `source` module is imported. Do not move that into a fixture: `ensure_home()` runs on first import, and an import that beat the stub would read, and encrypt, the developer's real database.
 
 ## Architecture
 
@@ -43,7 +39,7 @@ The `access_token` is the durable artifact; everything else in phase 1 is scaffo
 
 `plaid_api.ENV`, `CLIENT_ID`, and `SECRET` are module-level globals resolved by `plaid_api.reload()` — at import, and again whenever credentials are saved. Other modules must read them as attributes (`plaid_api.ENV`), never `from plaid_api import ENV`, or they will pin a stale value. `items.env` scopes rows by environment, so sandbox and production tokens coexist in one database without colliding — every query for Items must filter on env (`store.items(conn, plaid_api.ENV)`).
 
-Credential precedence: `~/.plutusTracker` first, then a project `.env` (kept as a fallback for older setups), then the process environment.
+Credential precedence: `~/.plutus/credentials` first, then the process environment. `plaid_api.call()` retries 429 and 5xx with backoff; a `PlaidError` is not retried because an expired login will not fix itself.
 
 ### One product family per Item
 

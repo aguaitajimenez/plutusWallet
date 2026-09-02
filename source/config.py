@@ -87,6 +87,11 @@ def ensure_home():
         restrict(root)
         notes.append("created {}".format(root))
 
+    # An explicitly relocated home is a deliberate, separate install - a test
+    # run, a second profile - and must never inherit the default one's data.
+    if os.environ.get("PLUTUS_HOME"):
+        return notes
+
     if LEGACY_CREDENTIALS.is_file() and not credentials_path().exists():
         shutil.copy2(LEGACY_CREDENTIALS, credentials_path())
         restrict(credentials_path())
@@ -124,6 +129,20 @@ def backup_db(keep=7):
         except OSError:
             pass
     return dest
+
+
+def serve(app, port, label):
+    """Run a Flask app on a production WSGI server, bound to loopback only.
+
+    Flask's built-in server is single-purpose development scaffolding and says
+    so on startup. Waitress is pure Python, works the same on Windows, and does
+    not pretend the app is reachable from anywhere but this machine - the
+    explicit 127.0.0.1 bind is a security boundary, not a default.
+    """
+    from waitress import serve as _serve
+    log.info("%s -> http://localhost:%d", label, port)
+    _serve(app, host="127.0.0.1", port=port, threads=8,
+           ident="PlutusTracker", clear_untrusted_proxy_headers=True)
 
 
 class _Redactor(logging.Filter):

@@ -1,6 +1,10 @@
-.env
+# Data and credentials live in ~/.plutus, never here.
 *.db
+*.db-*
+.env
 __pycache__/
 *.pyc
 venv/
-*.db-*
+.venv/
+.pytest_cache/
+.fuse_hidden*
