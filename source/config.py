@@ -43,6 +43,11 @@ def log_path():
     return home() / "plutus.log"
 
 
+def session_key_path():
+    """Signs the session cookie that carries the CSRF token."""
+    return home() / "session_key"
+
+
 # Pre-1.0 locations, migrated on first run.
 LEGACY_CREDENTIALS = Path.home() / ".plutusTracker"
 LEGACY_DB = PROJECT_DIR / "plaid_data.db"
