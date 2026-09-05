@@ -28,7 +28,8 @@ def test_no_secrets_in_any_tracked_file():
 def test_no_data_or_credential_files_are_tracked():
     bad = [f for f in tracked()
            if f.endswith((".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite3"))
-           or pathlib.PurePosixPath(f).name in {"credentials", "keyfile", ".env"}]
+           or pathlib.PurePosixPath(f).name in {"credentials", "keyfile",
+                                                "session_key", ".env"}]
     assert bad == [], "these must never be committed: {}".format(bad)
 
 

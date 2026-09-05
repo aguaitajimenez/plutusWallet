@@ -48,10 +48,78 @@ def test_a_cross_origin_post_is_refused(client):
                        ).status_code == 403
 
 
+def test_a_same_origin_form_post_with_an_opaque_origin_saves(client):
+    """Chrome sends `Origin: null` on a form post when the page's referrer
+    policy hid the origin. That is this app's own form, not a cross-site one,
+    and refusing it made the Save button permanently useless."""
+    token = csrf_of(client)
+
+    assert client.post("/settings",
+                       data={"target": "65", "floor": "2000", "csrf": token},
+                       headers={"Origin": "null"}).status_code == 302
+
+
+def test_an_opaque_origin_without_a_token_is_still_refused(client):
+    """Relaxing the origin check must not relax the one that does the work."""
+    csrf_of(client)
+
+    assert client.post("/settings", data={"target": "1"},
+                       headers={"Origin": "null"}).status_code == 403
+
+
+def test_the_referrer_is_still_never_sent_off_site(client):
+    """same-origin keeps our own Origin header intact while sending nothing
+    to another site."""
+    assert client.get("/").headers["Referrer-Policy"] == "same-origin"
+
+
 def test_link_server_json_endpoints_are_protected():
     assert link_server.app.test_client().post("/api/link_token").status_code == 403
     assert link_server.app.test_client().post(
         "/api/exchange", json={"public_token": "x"}).status_code == 403
+
+
+# --- saving the allocation settings -----------------------------------------
+
+def test_the_target_and_the_floor_are_both_saved(client, conn):
+    """The two fields of the allocation form, which is what a user actually
+    came to change."""
+    token = csrf_of(client)
+    resp = client.post("/settings",
+                       data={"target": "65", "floor": "2000", "csrf": token})
+
+    assert resp.status_code == 302
+    assert store.get_setting(conn, "saa_target") == "65.0"
+    assert store.get_setting(conn, "cash_floor") == "2000.0"
+
+
+def test_the_session_key_is_stable_rather_than_per_process():
+    """A fresh random key each start invalidated every page already open."""
+    assert security._session_key() == security._session_key()
+
+
+def test_both_servers_agree_on_the_session_key():
+    """Cookies ignore the port, so the dashboard on 8001 and the link server
+    on 8000 share one cookie; a key each meant visiting either one broke the
+    other's next save."""
+    assert dashboard.app.secret_key == link_server.app.secret_key
+
+
+def test_a_tab_left_open_across_a_restart_can_still_save(client):
+    token = csrf_of(client)
+    dashboard.app.secret_key = security._session_key()   # as a new process does
+
+    assert client.post("/settings",
+                       data={"target": "65", "floor": "2000", "csrf": token}
+                       ).status_code == 302
+
+
+def test_a_stale_token_is_refused_but_says_how_to_recover(client):
+    resp = client.post("/settings", data={"target": "1", "csrf": "stale"})
+
+    assert resp.status_code == 403
+    assert b"went stale" in resp.data
+    assert b"not</b> saved" in resp.data
 
 
 # --- DNS rebinding ----------------------------------------------------------

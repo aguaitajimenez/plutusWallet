@@ -66,6 +66,7 @@ re-clone the repository without losing anything.
     plaid_data.db     accounts, transactions, holdings, settings
     backups/          the last 7 database copies, taken before each sync
     plutus.log        rotating log
+    session_key       signs the dashboard's session cookie
 ```
 
 Set `PLUTUS_HOME` to move it elsewhere.

@@ -20,7 +20,8 @@ import sys
 
 # Files that must never be committed, whatever they contain.
 FORBIDDEN_NAMES = re.compile(
-    r"(^|/)(credentials|keyfile|\.env)$|\.(db|db-wal|db-shm|sqlite3?)$")
+    r"(^|/)(credentials|keyfile|session_key|\.env)$"
+    r"|\.(db|db-wal|db-shm|sqlite3?)$")
 
 PATTERNS = [
     ("Plaid access token",

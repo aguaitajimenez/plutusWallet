@@ -11,7 +11,7 @@ same-origin. So a local server still needs the same defences as a public one:
   * CSRF token       - every state-changing request must carry a secret this
                        server issued, which a cross-origin page cannot read.
   * Origin check     - belt and braces for browsers that send the header.
-  * Response headers - no sniffing, no framing, no referrer leakage.
+  * Response headers - no sniffing, no framing, no referrer sent off-site.
 
 There is deliberately no login. The threat being defended against is a hostile
 *web page*, not a hostile *user*: anyone with an account on this machine can
@@ -22,7 +22,9 @@ import logging
 import secrets
 from urllib.parse import urlparse
 
-from flask import abort, request, session
+from flask import Response, abort, request, session
+
+from . import config
 
 log = logging.getLogger("plutus")
 
@@ -65,8 +67,13 @@ def safe_redirect_target(value, fallback="/"):
 
 def _origin_ok(app_host):
     origin = request.headers.get("Origin") or request.headers.get("Referer")
-    if not origin:
-        return True          # curl and same-origin form posts may omit it
+    if not origin or origin == "null":
+        # Absent, or opaque. Browsers send "null" for a form post whose
+        # referrer policy hid the origin - which this app's own pages used to
+        # do, so every save it offered was refused as cross-site. Either way
+        # there is nothing to compare, and the CSRF token below is the check
+        # that actually stops a hostile page: it cannot read the token.
+        return True
     try:
         parsed = urlparse(origin)
     except ValueError:
@@ -74,11 +81,66 @@ def _origin_ok(app_host):
     return bool(parsed.netloc) and parsed.netloc == app_host
 
 
+STALE_PAGE = """<!doctype html><meta charset=utf-8><title>Page went stale</title>
+<style>body{font:15px/1.6 system-ui,sans-serif;max-width:34rem;
+margin:4rem auto;padding:0 1rem;background:#fff;color:#222}
+h1{font-size:1.15rem}a{color:#06c}
+@media (prefers-color-scheme:dark){body{background:#141414;color:#e6e6e6}
+a{color:#6cf}}</style>
+<h1>This page went stale</h1>
+<p>Your change was <b>not</b> saved. This page was loaded before the server
+   last started, so the security token on its form is no longer the one the
+   server expects.</p>
+<p><a href="/">Reload the dashboard</a>, then make the change again.</p>
+"""
+
+
+def _session_key():
+    """A signing key for the session cookie, stable across restarts.
+
+    It has to persist, and both servers have to agree on it. Cookies ignore
+    the port, so the dashboard on 8001 and the link server on 8000 share a
+    single cookie on localhost; with a key each, every visit to one of them
+    silently invalidated the other's CSRF token and the next save came back
+    403. A restart did the same to any tab left open.
+
+    The cookie carries nothing but the CSRF token, and the file is owner-only
+    beside the database, so keeping it costs no secrecy that is not already
+    lost if someone can read that directory.
+    """
+    path = config.session_key_path()
+    try:
+        if path.is_file():
+            existing = path.read_text(encoding="ascii").strip()
+            if existing:
+                return existing
+        config.ensure_home()
+        key = secrets.token_urlsafe(32)
+        path.write_text(key, encoding="ascii")
+        config.restrict(path)
+        return key
+    except OSError as exc:
+        # Not fatal: the server still runs, but a tab left open will need a
+        # reload after a restart.
+        log.warning("cannot persist the session key (%s); open pages will "
+                    "need a reload after a restart", exc)
+        return secrets.token_urlsafe(32)
+
+
+def _stale_token_response():
+    """Refuse the request, but tell a legitimate user how to recover.
+
+    A bare 403 is right for an attack and useless for the far commoner case:
+    a real user on a page older than the server. The request is still
+    rejected and no token is handed out - only the wording changes.
+    """
+    return Response(STALE_PAGE, status=403,
+                    content_type="text/html; charset=utf-8")
+
+
 def harden(app, csp=CSP_STRICT):
     """Apply the guards above to a Flask app. Call once, at import time."""
-    # Per-process key: sessions intentionally do not survive a restart, and
-    # nothing of value is stored in them beyond the CSRF token.
-    app.secret_key = secrets.token_urlsafe(32)
+    app.secret_key = _session_key()
 
     @app.before_request
     def _guard():
@@ -96,13 +158,13 @@ def harden(app, csp=CSP_STRICT):
             if not expected or not supplied or not secrets.compare_digest(
                     str(expected), str(supplied)):
                 log.warning("rejected %s %s: bad CSRF token", request.method, request.path)
-                abort(403)
+                return _stale_token_response()
 
     @app.after_request
     def _headers(resp):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
-        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        resp.headers.setdefault("Referrer-Policy", "same-origin")
         resp.headers.setdefault("Content-Security-Policy", csp)
         resp.headers.setdefault("Cache-Control", "no-store")
         return resp

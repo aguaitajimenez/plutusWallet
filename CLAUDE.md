@@ -20,7 +20,7 @@ Everything else lives in the `source/` package and stays individually runnable �
 
 Layout: `app.py` (TUI) at the root; `source/` holds `config` (paths, permissions, logging), `plaid_api` (REST wrapper + credential store), `store` (SQLite), `sync`, `link_server`, and `dashboard`.
 
-Nothing user-specific lives in the checkout. `source/config.py` owns the layout under `~/.plutus/` — `credentials`, `plaid_data.db`, `backups/`, `plutus.log` — so the repo stays disposable. Always address those through `config.db_path()` / `config.credentials_path()`, never by joining paths from `__file__`. `PLUTUS_HOME` relocates the whole directory. Pre-1.0 locations (`~/.plutusTracker`, `<project>/plaid_data.db`) are migrated by `config.ensure_home()` on first run, which copies rather than moves.
+Nothing user-specific lives in the checkout. `source/config.py` owns the layout under `~/.plutus/` — `credentials`, `plaid_data.db`, `backups/`, `plutus.log`, `session_key` — so the repo stays disposable. Always address those through `config.db_path()` / `config.credentials_path()`, never by joining paths from `__file__`. `PLUTUS_HOME` relocates the whole directory. Pre-1.0 locations (`~/.plutusTracker`, `<project>/plaid_data.db`) are migrated by `config.ensure_home()` on first run, which copies rather than moves.
 
 `tests/conftest.py` points `PLUTUS_HOME` at a temp directory, sets `PLUTUS_NO_KEYRING`, and stubs `plaid_api.call` **at module scope** — before any `source` module is imported. Do not move that into a fixture: `ensure_home()` runs on first import, and an import that beat the stub would read, and encrypt, the developer's real database.
 
