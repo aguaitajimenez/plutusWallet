@@ -32,21 +32,41 @@ python app.py
 
 ## First run
 
-You need your own Plaid account — the app never ships with credentials.
+PlutusTracker ships with no credentials of its own: you point it at a Plaid
+account you control. Everything below is free.
 
-1. Sign up at [dashboard.plaid.com/signup](https://dashboard.plaid.com/signup).
-2. Apply for the free **Trial plan** at
+1. **Sign up** at [dashboard.plaid.com/signup](https://dashboard.plaid.com/signup).
+   When asked *How will you use Plaid?*, choose **Personal use**.
+
+   Avoid the alternatives. *Business* opens a company application, and *App
+   user* is for people connecting an account to somebody else's Plaid-powered
+   app — here you are building the app, not using one.
+
+2. **Create your login** and verify your e-mail address. When asked for a use
+   case, choose **Personal finance**.
+
+3. **Request the Trial plan.** Signing up leaves you on the Dashboard
+   overview; request it from there, or go straight to
    [dashboard.plaid.com/trial-plan](https://dashboard.plaid.com/trial-plan).
-   It gives real production data at no cost, capped at 10 linked institutions.
-   Do **not** apply for full Production access — a pending application
-   disqualifies you from the free tier.
-3. Copy your `client_id` and secret from **Developers → Keys**.
-4. Run `python app.py`, choose **[c] Configure**, and paste them. The secret is
-   hidden as you type, and the app works out whether it is a Sandbox or
-   Production key by itself.
-5. Choose **[l] Link**, then connect each institution. Pick **Bank** for
-   chequing, savings and cards; pick **Brokerage** for investment accounts.
-6. Choose **[Enter] Dashboard**.
+   Most applications are approved automatically. The plan costs nothing,
+   returns real production data, and covers up to 10 linked institutions.
+
+   > **Never apply for full Production access.** The Trial plan is offered
+   > only to accounts that have never applied for, or held, any form of
+   > Production access, and there is no self-service way back once you have.
+
+4. **Wait until the plan is granted**, then copy your `client_id` and secret
+   from **Developers → Keys**. Collecting them earlier leaves you on Sandbox:
+   the app infers the environment from the secret itself, not from anything
+   you tell it.
+
+5. **Configure the app.** Run `python app.py`, choose **[c] Configure**, and
+   paste both values. The secret stays hidden as you type.
+
+6. **Link your institutions.** Choose **[l] Link**. Pick **Bank** for chequing,
+   savings and cards; pick **Brokerage** for investment accounts.
+
+7. **Open the dashboard** with **[Enter]**.
 
 ### Practise first
 
@@ -145,7 +165,7 @@ python -m source.sync
 
 ## Licence
 
-[PolyForm Noncommercial 1.0.0](LICENSE) - use it, change it and share it
+[PolyForm Noncommercial 1.0.0](LICENSE) — use it, change it and share it
 freely for any noncommercial purpose: personal projects, study, research,
 and use by charities, schools and government bodies. Commercial use is not
 granted by this licence.
