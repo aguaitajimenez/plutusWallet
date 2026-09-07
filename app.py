@@ -21,8 +21,8 @@ def _safe_sync(label):
 
 
 def configure():
-    """Prompt for a Plaid client_id/secret pair and store it in ~/.plutusTracker."""
-    print("\nPlaid credentials -> {}".format(plaid_api.CONFIG_PATH))
+    """Prompt for a Plaid client_id/secret pair and store it in ~/.plutus."""
+    print("\nPlaid credentials -> {}".format(config.credentials_path()))
     print("Find them at https://dashboard.plaid.com/developers/keys")
     print("(leave the Client ID blank to cancel)\n")
     try:
