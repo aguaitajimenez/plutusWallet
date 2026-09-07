@@ -8,3 +8,8 @@ venv/
 .venv/
 .pytest_cache/
 .fuse_hidden*
+
+# Claude Code local state - sessions, worktrees - minus the launch profile,
+# which is checked in.
+.claude/*
+!.claude/launch.json

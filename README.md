@@ -137,14 +137,31 @@ Logs are in `~/.plutus/plutus.log`.
 
 ## Development
 
+```bash
+python -m pytest
+```
+
+The suite runs entirely offline — it points `PLUTUS_HOME` at a temporary
+directory, stubs out the Plaid client, and never touches your real database or
+your OS keyring.
+
+After cloning, turn on the credential guard:
+
+```bash
+git config core.hooksPath scripts/githooks
+```
+
+That runs `scripts/check_secrets.py` before every commit and refuses anything
+that looks like a Plaid key, an access token, a private key, or a database
+file. The same scanner runs as part of the test suite, so a commit made with
+`--no-verify` still gets caught before a release. Nothing in this repository
+should ever contain a credential: they all live in `~/.plutus`.
+
 Individual components stay runnable on their own:
 
 ```bash
 python -m source.sync
 ```
-
-Nothing in this repository should ever contain a credential: they all live
-in `~/.plutus`.
 
 ## Licence
 

@@ -5,12 +5,66 @@
 Menu-driven: configure Plaid credentials, open the dashboard (syncs on entry;
 the page's Refresh button pulls after that, with an optional auto-refresh
 toggle in its dropdown), link a new institution, or just sync. Ctrl+C inside a
-mode returns to the menu.
+mode returns to the menu. Menu keys act on the keypress itself - no Enter.
 """
 import getpass
+import os
+import sys
 import webbrowser
 
 from source import config, plaid_api, store, sync
+
+
+def read_key():
+    """Wait for one keypress and return it lowercased - no Enter required.
+
+    Menu commands are single letters, so making the user confirm each one with
+    Enter is a keystroke of pure ceremony. Returns "" for Enter and for keys
+    carrying no printable character (arrows, function keys); the caller already
+    ignores anything it does not recognise.
+
+    When stdin is not a terminal - piped input, a test harness - there is no
+    keypress to wait for, so fall back to a whole line and keep its first
+    character.
+    """
+    if not sys.stdin.isatty():
+        line = sys.stdin.readline()
+        if not line:
+            raise EOFError
+        return line.strip().lower()[:1]
+
+    if os.name == "nt":
+        import msvcrt
+
+        ch = msvcrt.getwch()
+        if ch in ("\x00", "\xe0"):  # arrow/function key: drop its scan code too
+            msvcrt.getwch()
+            return ""
+        if ch == "\x03":  # getwch reads Ctrl+C as data, never as a signal
+            raise KeyboardInterrupt
+        if ch == "\x04":
+            raise EOFError
+        return "" if ch in ("\r", "\n") else ch.lower()
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)  # cbreak rather than raw, so Ctrl+C still signals
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":  # escape sequence: swallow the rest before restoring
+            import select
+
+            while select.select([fd], [], [], 0)[0]:
+                sys.stdin.read(1)
+            return ""
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    if not ch:
+        raise EOFError
+    return "" if ch in ("\r", "\n") else ch.lower()
 
 
 def _safe_sync(label):
@@ -111,11 +165,13 @@ def main():
   [c]      Configure Plaid credentials
   [q]      Quit
 """)
+        print("> ", end="", flush=True)
         try:
-            choice = input("> ").strip().lower()
+            choice = read_key()
         except (KeyboardInterrupt, EOFError):
             print()
             return
+        print(choice)  # a keypress is not echoed, so show what was pressed
 
         if choice == "c":
             configure()
