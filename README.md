@@ -128,4 +128,7 @@ in `~/.plutus`.
 
 ## Licence
 
-Proprietary. See [LICENSE](LICENSE).
+[PolyForm Noncommercial 1.0.0](LICENSE) - use it, change it and share it
+freely for any noncommercial purpose: personal projects, study, research,
+and use by charities, schools and government bodies. Commercial use is not
+granted by this licence.
