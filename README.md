@@ -21,7 +21,7 @@ here can place a trade or move a dollar.
 Requires Python 3.9 or newer.
 
 ```bash
-git clone <your-repo-url> plutustracker && cd plutustracker && pip install -r requirements.txt
+git clone https://github.com/aguaitajimenez/plutusWallet plutustracker && cd plutustracker && pip install -r requirements.txt
 ```
 
 Then start it:
