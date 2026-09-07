@@ -56,9 +56,9 @@ def conn():
 def linked(conn):
     """One bank Item and one brokerage Item, as a real install would have."""
     store.save_item(conn, "item_bank", "access-sandbox-bank",
-                    "ins_chase", "Chase", "sandbox")
+                    "ins_bank", "Example Bank", "sandbox")
     store.save_item(conn, "item_brok", "access-sandbox-brok",
-                    "ins_wf", "Wealthfront", "sandbox")
+                    "ins_brok", "Example Brokerage", "sandbox")
     conn.executemany(
         "INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)",
         [("acc_check", "item_bank", "Checking", None, "depository", "checking",

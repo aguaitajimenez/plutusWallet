@@ -1,7 +1,7 @@
 """The money math: what counts as spending, and what the SAA card recommends.
 
 These are the calculations a user would act on, so they are the ones worth
-pinning down. Most of the bugs this suite guards against were real: Wealthfront
+pinning down. Most of the bugs this suite guards against were real: brokerage
 deposits counted as expenses, rent cheques dropped entirely, and an allocation
 gap that disagreed with itself.
 """
@@ -41,7 +41,7 @@ def test_categories_are_split_into_readable_buckets():
 def test_money_moved_to_a_linked_institution_is_never_an_expense(linked):
     add_txns(linked, [
         ("t1", "acc_check", "2026-08-01", "PAYROLL", -4000.0, "Transfer > Payroll"),
-        ("t2", "acc_check", "2026-08-05", "Wealthfront", 2000.0,
+        ("t2", "acc_check", "2026-08-05", "Example Brokerage", 2000.0,
          "Service > Financial > Financial Planning and Investments"),
         ("t3", "acc_check", "2026-08-06", "WHOLE FOODS", 120.0,
          "Shops > Supermarkets and Groceries"),
@@ -50,16 +50,16 @@ def test_money_moved_to_a_linked_institution_is_never_an_expense(linked):
     _, _, this, cats = dashboard._flows(linked, "sandbox", accounts)
 
     assert this["income"] == 4000.0
-    assert this["expenses"] == 120.0      # the 2000 to Wealthfront is not spending
+    assert this["expenses"] == 120.0      # the 2000 to the brokerage is not spending
     assert cats == {"Groceries": 120.0}
 
 
 def test_every_transaction_is_either_counted_or_explicitly_internal(linked):
     add_txns(linked, [
         ("t1", "acc_check", "2026-08-01", "PAYROLL", -4000.0, "Transfer > Payroll"),
-        ("t2", "acc_check", "2026-08-02", "Wealthfront", 2000.0, "Service > Financial"),
+        ("t2", "acc_check", "2026-08-02", "Example Brokerage", 2000.0, "Service > Financial"),
         ("t3", "acc_check", "2026-08-03", "RENT", 2395.0, "Transfer > Withdrawal > Check"),
-        ("t4", "acc_card", "2026-08-04", "PAYMENT TO CHASE CARD", 500.0,
+        ("t4", "acc_card", "2026-08-04", "PAYMENT TO CREDIT CARD", 500.0,
          "Payment > Credit Card"),
     ])
     accounts, _ = dashboard._accounts(linked, "sandbox")
@@ -117,7 +117,7 @@ def test_defaults_apply_when_nothing_is_configured(linked):
 def _sub_txns(name, dates, amount, category="Service > Subscription"):
     return [{"transaction_id": "{}{}".format(name, i), "account_id": "acc_check",
              "date": d, "name": name, "merchant_name": name, "amount": amount,
-             "category": category, "transfer": False, "institution": "Chase"}
+             "category": category, "transfer": False, "institution": "Example Bank"}
             for i, d in enumerate(dates)]
 
 

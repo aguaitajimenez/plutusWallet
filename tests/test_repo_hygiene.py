@@ -53,7 +53,7 @@ def test_no_developer_paths_or_addresses_leak():
         assert not re.search(r"/home/[a-z]", text), "POSIX home path in {}".format(name)
         found = [m for m in email.findall(text)
                  if not m.endswith(("example.com", "example.org", "plaid.com",
-                                    "tastytrade.com", "noreply@anthropic.com"))]
+                                    "noreply@anthropic.com"))]
         assert not found, "e-mail address in {}: {}".format(name, found)
 
 

@@ -43,7 +43,7 @@ Credential precedence: `~/.plutus/credentials` first, then the process environme
 
 ### One product family per Item
 
-`/link/token/create` with multiple products hides every institution that doesn't support *all* of them. Requesting `transactions` + `investments` together would remove Wealthfront from the picker. Hence the dropdown in the Link page: banks link as `transactions`, brokerages as `investments`, each producing its own Item.
+`/link/token/create` with multiple products hides every institution that doesn't support *all* of them. Requesting `transactions` + `investments` together would hide any brokerage that does not also support `transactions`. Hence the dropdown in the Link page: banks link as `transactions`, brokerages as `investments`, each producing its own Item.
 
 Consequently `sync.py` doesn't know what an Item supports. It attempts all three pulls against every Item and treats the error codes in `SKIPPABLE` as "n/a" rather than failure. `ITEM_LOGIN_REQUIRED` is called out separately because it means the connection genuinely needs re-authentication.
 
@@ -53,7 +53,7 @@ Transactions are incremental via a cursor stored on the Item row. Holdings are a
 
 - **The Plaid Trial plan allows 10 Production Items, lifetime.** Removing an Item does *not* free a slot. Never develop or debug against production — use Sandbox, which is free and unlimited.
 - **Never apply for full Production access.** A pending or approved Production application disqualifies the team from the free Trial plan permanently.
-- **Chase relinking is destructive.** Creating a new Item for Chase invalidates the existing one when the account sets differ. Reuse the stored token; don't relink casually.
+- **Relinking can be destructive.** At some banks, creating a new Item invalidates the existing one when the account sets differ. Reuse the stored token; don't relink casually.
 - Sandbox credentials are `user_good` / `pass_good`, MFA code `1234`.
 
 ## Secrets

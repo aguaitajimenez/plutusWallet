@@ -1,7 +1,7 @@
 """Local money dashboard over plaid_data.db, in three tabs:
 
     Overview          - what you have right now, per institution
-    Income & Expenses - monthly cash flow aggregated across Chase + Wealthfront
+    Income & Expenses - monthly cash flow aggregated across every linked account
     Investments       - holdings, allocation, unrealized gains
 
     python dashboard.py   ->   http://localhost:8001
@@ -61,7 +61,7 @@ TRANSFER_PREFIXES = ("Transfer", "Payment > Credit Card")
 # Kept in the cash-flow math despite the Transfer prefix - these are money
 # crossing the household boundary, not internal moves: payroll/deposits in,
 # checks, Zelle/ACH debits, and cash withdrawals out. Own-institution moves
-# (Wealthfront, card payments) are still caught by name and category above.
+# (brokerage deposits, card payments) are still caught by name and category above.
 KEEP_AS_CASHFLOW = ("Transfer > Payroll", "Transfer > Deposit",
                     "Transfer > Withdrawal", "Transfer > Debit",
                     "Transfer > Credit")
@@ -264,8 +264,8 @@ def _flows(conn, env, accounts):
         )
     ]
     # A transaction naming one of the user's own institutions is money moving
-    # between their own accounts, whatever Plaid categorized it as (Wealthfront
-    # deposits arrive as "Service > Financial", not "Transfer").
+    # between their own accounts, whatever Plaid categorized it as (brokerage
+    # deposits often arrive as "Service > Financial", not "Transfer").
     names = {(a["institution"] or "").lower() for a in accounts} - {"", "unknown"}
     inst_re = re.compile(r"\b(" + "|".join(sorted(re.escape(n) for n in names)) + r")\b") \
         if names else None
@@ -871,8 +871,8 @@ LAYOUT = """
 {% if c.empty %}
   <div class=empty>
     <p>No accounts linked yet.</p>
-    <p>Run <code>python link_server.py</code> to connect Chase and Wealthfront,
-       then <code>python sync.py</code>.</p>
+    <p>Run <code>python link_server.py</code> to connect your bank and your
+       brokerage, then <code>python sync.py</code>.</p>
   </div>
 {% else %}
   {% block body %}{% endblock %}
@@ -1342,7 +1342,7 @@ INVEST = """
   {% endfor %}
 </table></div>
 {% else %}
-<div class=empty><p>No holdings synced yet. Link Wealthfront as
+<div class=empty><p>No holdings synced yet. Link your brokerage as
   <b>Brokerage</b> in the link server, then refresh.</p></div>
 {% endif %}
 
