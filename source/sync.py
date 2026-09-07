@@ -6,6 +6,7 @@ Safe to run repeatedly: transactions use a stored cursor, so each run fetches
 only what changed. Holdings are a full snapshot and get overwritten.
 """
 import datetime
+import logging
 import time
 
 from . import config, plaid_api, store
@@ -13,6 +14,8 @@ from . import config, plaid_api, store
 LOOKBACK_DAYS = 730   # Plaid's maximum
 PAGE = 500            # max page size for /investments/transactions/get
 REFRESH_WAIT_S = 8    # refresh is asynchronous; give Plaid time to re-pull
+
+log = logging.getLogger("plutus")
 
 # Errors that just mean "this Item is not that kind of account" - not failures.
 SKIPPABLE = {
