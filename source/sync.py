@@ -108,8 +108,8 @@ def sync_transactions(conn, item):
 
 
 def sync_investment_transactions(conn, item):
-    """Buys, sells, dividends and fees. Paginated: Wealthfront's automated
-    investing generates hundreds of small transactions."""
+    """Buys, sells, dividends and fees. Paginated: an automated investing
+    service generates hundreds of small transactions."""
     end = datetime.date.today()
     start = end - datetime.timedelta(days=LOOKBACK_DAYS)
     offset = seen = 0

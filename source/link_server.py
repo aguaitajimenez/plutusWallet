@@ -2,7 +2,7 @@
 
     python link_server.py   ->   http://localhost:8000
 
-Bank credentials go to Plaid's widget (or, for OAuth banks like Chase, to the
+Bank credentials go to Plaid's widget (or, for banks that use OAuth, to the
 bank's own site). They never touch this process.
 """
 from flask import Flask, jsonify, render_template_string, request
