@@ -23,10 +23,30 @@ SKIPPABLE = {
     "PRODUCT_NOT_READY",
     "NO_INVESTMENT_ACCOUNTS",
     "NO_ACCOUNTS",
-    # Each Item is linked for one product family only, so the other pulls
-    # are expected to lack consent.
+    # An Item may genuinely lack consent for a product family. That is only
+    # benign when the Item holds no account the product would have covered -
+    # see cash_accounts_without_transactions.
     "ADDITIONAL_CONSENT_REQUIRED",
 }
+
+# Account types whose activity arrives through the transactions product.
+CASH_TYPES = ("depository", "credit")
+
+
+def cash_accounts_without_transactions(conn, item):
+    """Cash accounts under an Item that cannot sync for want of the product.
+
+    An Item's products are fixed when it is created, so a brokerage linked for
+    `investments` alone fetches nothing for its cash account. Plaid answers
+    that pull with a consent error, and reporting it as "n/a" makes it look
+    identical to an Item that simply has no cash accounts - which is how a
+    salary paid into a brokerage's cash account stayed missing from cash flow
+    without anything ever looking wrong.
+    """
+    qs = ",".join("?" * len(CASH_TYPES))
+    return [r["name"] or r["account_id"] for r in conn.execute(
+        "SELECT account_id, name FROM accounts WHERE item_id = ? "
+        "AND type IN ({})".format(qs), (item["item_id"],) + CASH_TYPES)]
 
 
 def refresh_all(items):
@@ -202,7 +222,7 @@ def main():
     asked = refresh_all(linked)
     log.info("refreshed: %s", ", ".join(asked) or "nothing")
 
-    needs_reauth = []
+    needs_reauth, uncovered = [], []
     for item in linked:
         log.info("\n%s", item["institution_name"])
         for label, fn in (("accounts", sync_accounts),
@@ -213,7 +233,17 @@ def main():
                 log.info("  %-13s %s", label, fn(conn, item))
             except plaid_api.PlaidError as exc:
                 if exc.code in SKIPPABLE:
-                    log.info("  %-13s n/a", label)
+                    blind = (cash_accounts_without_transactions(conn, item)
+                             if label == "transactions" else [])
+                    if blind:
+                        log.warning(
+                            "  %-13s NOT SYNCED - this Item has no transactions "
+                            "product, so nothing from %s is pulled",
+                            label, ", ".join(blind))
+                        if item["institution_name"] not in uncovered:
+                            uncovered.append(item["institution_name"])
+                    else:
+                        log.info("  %-13s n/a", label)
                 elif exc.code == "ITEM_LOGIN_REQUIRED":
                     log.warning("  %-13s REAUTH NEEDED - relink this institution", label)
                     if item["institution_name"] not in needs_reauth:
@@ -222,6 +252,12 @@ def main():
                     log.error("  %-13s %s", label, exc)
             except Exception as exc:  # one bad Item must not abort the rest
                 log.exception("  %-13s unexpected failure: %s", label, exc)
+
+    if uncovered:
+        log.warning(
+            "%s: cash accounts are not being synced, so money paid into "
+            "them is missing from cash flow. Fix without spending a Plaid "
+            "Item: [l] Link -> Add missing products.", ", ".join(uncovered))
 
     log.info("\nSync complete.")
     return needs_reauth
